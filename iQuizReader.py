@@ -3,10 +3,10 @@ import numpy as np
 import os
 import sys
 import re
-if sys.version_info[0] > 3:
+if sys.version_info[0] >= 3:
     from tkinter.filedialog import askdirectory, askopenfilename
     from tkinter import messagebox
-else:
+if sys.version_info[0] < 3:
     from tkFileDialog import askopenfilename, askdirectory
     import tkMessageBox as messagebox
 
@@ -45,7 +45,7 @@ class semester_data:
             if len(name_and_num) > 1:
                 name_and_num = [name_and_num[0] + ',' + name_and_num[1]]
             else:
-                name_and_num = [name_and_num + ',']
+                name_and_num = [name_and_num[0] + ',']
             csv_list.append(name_and_num+['']*4+self._answer_map[student_key][0]+['']+self._answer_map[student_key][1])
         np.savetxt(filename, csv_list, fmt='%s', delimiter=', ',header=header, comments='')
 
