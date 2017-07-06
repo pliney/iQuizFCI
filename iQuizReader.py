@@ -1,20 +1,20 @@
 from pprint import pprint as pp
+from tkinter.filedialog import askdirectory, askopenfile, askopenfilename
+from tkinter import messagebox
 import numpy as np
-
+import os
 
 class semester_data:
-    _students = []
-    _answer_map = {}
-
-
     def __init__(self, semester_name, num_questions):
+        self._students = []
+        self._answer_map = {}
         self._name = semester_name
         self._num_questions = num_questions
 
     def add_student(self, student_key):
         if student_key not in self._students:
             self._students.append(student_key)
-            self._answer_map[student_key] = [[","]*self._num_questions, [""]*self._num_questions]
+            self._answer_map[student_key] = [[""]*self._num_questions, [""]*self._num_questions]
 
     def add_pre_answers(self, answer_list, student_key):
         if student_key not in self._students:
@@ -31,22 +31,45 @@ class semester_data:
     def write_csv_file(self, filename):
         header = self.generate_csv_header()
         csv_list = []
-
-        for student_key in self._answer_map:
+        keys = list(self._answer_map.keys())
+        list.sort(keys)
+        for student_key in keys:
             """add to start of list"""
             csv_list.append([student_key]+['']*5+self._answer_map[student_key][0]+['']+self._answer_map[student_key][1])
-        np.savetxt(filename, csv_list, fmt='%s', delimiter=', ',header=header)
-
+        np.savetxt(filename, csv_list, fmt='%s', delimiter=', ',header=header, comments='')
 
     def generate_csv_header(self):
         q_headers = ''
-        for i in range(1,(self._num_questions+1)):
+        n_questions = self._num_questions
+        for i in range(1,(n_questions+1)):
             q_headers += "Q" + str(i)+','
-        return "Student info,,,,,,Pre-Test Responses,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,POST-Test Responses,,,,," \
-               ",,,,,,,,,,,,,,,,,,,,,,,,\nName,ID#,Major,Gender,University (M or U),," +q_headers + "," + q_headers
-               # "Q1,Q2,Q3,Q4,Q5,Q6,Q7,Q8,Q9," \
-               # "Q10,Q11,Q12,Q13,Q14,Q15,Q16,Q17,Q18,Q19,Q20,Q21,Q22,Q23,Q24,Q25,Q26,Q27,Q28,Q29,Q30,,Q1,Q2,Q3,Q4,Q5," \
-               # "Q6,Q7,Q8,Q9,Q10,Q11,Q12,Q13,Q14,Q15,Q16,Q17,Q18,Q19,Q20,Q21,Q22,Q23,Q24,Q25,Q26,Q27,Q28,Q29,Q30"
+        return "Student info,,,,,,Pre-Test Responses"+','*(n_questions+1)+"POST-Test Responses" + \
+               "\nName,ID#,Major,Gender,University (M or U),," +q_headers + "," + q_headers
+
+    def add_directory(self, dir_name, quiz_map, pre_or_post):
+        for student_filename in os.listdir(dir_name):
+            student_file_fullpath = os.path.join(dir_name, student_filename)
+            self.add_student_answers(student_quiz_filename=student_file_fullpath, student_key=student_filename,
+                                quiz_map=quiz_map, pre_or_post=pre_or_post)
+
+    def add_student_answers(self, student_quiz_filename, student_key, quiz_map, pre_or_post):
+        num_questions = len(quiz_map)
+        try:
+            qkc, qac = parse_student_file(student_quiz_filename, num_questions)
+        except:
+            print('Failed to parse student answers for file: ' + student_quiz_filename)
+            return
+
+        try:
+            correlated_answers = correlate_answers(qac, quiz_map)
+        except:
+            print('Failed to correlate student ansers to key for file: ' + student_quiz_filename)
+            return
+
+        if pre_or_post == "pre":
+            self.add_pre_answers(correlated_answers, student_key)
+        else:
+            self.add_post_answers(correlated_answers, student_key)
 
 
 def parse_student_file(filename, num_questions):
@@ -62,25 +85,16 @@ def parse_student_file(filename, num_questions):
             qkc.append(next_line)
         f.readline()
 
-        for i in range(0, num_questions):
+        i = 1
+        while i <= num_questions:
             next_line = f.readline().split()
+            if str(i) not in next_line[0]:
+                qac.append('')
+                i += 1
             qac.append(next_line[1])
+            i += 1
 
     return qkc, qac
-
-
-"""Need to figure out way to go through all the relevant files in a directory"""
-def run_through_directory():
-    pass
-
-
-def add_student_answers(student_quiz_filename, student_key, sem_data, quiz_map, num_questions, pre_or_post):
-    qkc, qac = parse_student_file(student_quiz_filename, num_questions)
-    correlated_answers = correlate_answers(qac, quiz_map)
-    if pre_or_post == "pre":
-        sem_data.add_pre_answers(correlated_answers, student_key)
-    else:
-        sem_data.add_post_answers(correlated_answers, student_key)
 
 
 def correlate_answers(student_qa, quiz_map):
@@ -102,22 +116,55 @@ def parse_quiz_map(filename):
     return quiz_map
 
 
-def main():
-    quizmap = parse_quiz_map('quiz_key.txt')
+def get_directory(msg):
+    dir_name = askdirectory(title=msg)
+    return dir_name
+
+
+def get_quizmap():
+    messagebox.showinfo(title="Greetings", message="Select quiz key file")
+    quiz_filename = askopenfilename(title='Select quiz key file')
+    return parse_quiz_map(quiz_filename)
+
+
+def get_sub_dirs(dirname):
+    sub_dirs = []
+    for subdir, dirs, files in os.walk(dirname):
+        for d in dirs:
+            sub_dirs.append(d)
+    return sub_dirs
+
+
+def add_directories():
+    messagebox.showinfo(title="Greetings", message="Select pretest directory")
+    pre_dirname = get_directory("Select pretest directory")
+    messagebox.showinfo(title="Greetings", message="Select post-test directory")
+    post_dirname = get_directory("Select post test directory")
+    pre_dirs = get_sub_dirs(pre_dirname)
+    post_dirs = get_sub_dirs(post_dirname)
+
+    quizmap = get_quizmap()
     n_questions = len(quizmap)
-    s_data = semester_data('spring', n_questions)
-    # add_student_answers('MICHAELIM6185', 'MICHAELIM6185', s_data, quizmap, n_questions, 'pre')
-    # add_student_answers('MICHAELIM6185', 'MICHAELIM6185', s_data, quizmap, n_questions, 'post')
-    # add_student_answers('BROWNK9241', 'BROWNK9241', s_data, quizmap, n_questions, 'pre')
-    # add_student_answers('BROWNK9241', 'BROWNK9241', s_data, quizmap, n_questions, 'post')
-    """Add try/catch for add_student_anwsers call"""
-    add_student_answers('YIH7383', 'YIH7383', s_data, quizmap, n_questions, 'pre')
-    add_student_answers('YIH7383', 'YIH7383', s_data, quizmap, n_questions, 'post')
-    # add_student_answers('ZILLMANNR3944', 'ZILLMANNR3944', s_data, quizmap, n_questions, 'pre')
-    # add_student_answers('ZILLMANNR3944', 'ZILLMANNR3944', s_data, quizmap, n_questions, 'post')
-    s_data.write_csv_file('testfile.csv')
+    for class_name in pre_dirs:
+        s_data = semester_data(class_name, n_questions)
+
+        s_data.add_directory(dir_name=os.path.join(pre_dirname,class_name),
+                             quiz_map=quizmap, pre_or_post='pre')
+        if class_name in post_dirs:
+            s_data.add_directory(dir_name=os.path.join(post_dirname, class_name),
+                                 quiz_map=quizmap, pre_or_post='post')
+            post_dirs.remove(class_name)
+        s_data.write_csv_file(class_name + '.csv')
+
+    for class_name in post_dirs:
+        s_data = semester_data(class_name, n_questions)
+        s_data.add_directory(dir_name=os.path.join(post_dirname, class_name),
+                             quiz_map=quizmap, pre_or_post='post')
+        s_data.write_csv_file(class_name + '.csv')
 
 
+def main():
+    add_directories()
 
 if __name__ == "__main__":
     main()

@@ -29,5 +29,3 @@ Question -> Question key
 28, 25
 29, 26
 30, 27
-31, 32
-32, 31
